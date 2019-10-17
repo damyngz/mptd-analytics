@@ -1,15 +1,17 @@
-from backend.finance.indicators.moving_average import *
-# from mptd.da
+import logging, re
+
+from backend.finance.indicators import moving_average, candle
+from mptd.database.DatabaseSocket import DatabaseSocket
 from bokeh.layouts import row, column, gridplot
 from bokeh.models import ColumnDataSource, Slider, Select
 from bokeh.plotting import curdoc, figure
 from bokeh.driving import count
 
-
+# =====================================================================================================================
 source = ColumnDataSource(dict(
-    time=[], average=[], low=[], high=[], open=[], close=[],
-    ma=[], macd=[], macd9=[], macdh=[], color=[]
-))
+        time=[], average=[], low=[], high=[], open=[], close=[],
+        ma=[], macd=[], macd9=[], macdh=[], color=[]
+    ))
 
 plot_1 = figure(plot_height=500, tools="xpan,reset", x_axis_type=None, y_axis_location="right")
 plot_1.x_range.follow = "end"
@@ -29,20 +31,47 @@ plot_2.line(x='time', y='macd9', color='blue', source=source)
 plot_2.segment(x0='time', y0=0, x1='time', y1='macdh', line_width=6, color='black', alpha=0.5, source=source)
 
 GLOBAL_MIN_TICK = 0
-DBSOCK =
+DBSOCK = DatabaseSocket(host='172.17.0.2', password='1234', user='root', port=3306)
+DBSOCK.connect(db='mptd_test')
+logger = logging.getLogger(__name__)
 
+
+# =====================================================================================================================
 def set_global_tick():
     global GLOBAL_MIN_TICK
-    GLOBAL_MIN_TICK
+    GLOBAL_MIN_TICK = \
+    DBSOCK.pass_query("select tick from oanda_instrument_candles where granularity=\'S5\' order by tick asc limit 1")[1]
+    logger.info('GLOBAL_MIN_TICK set to {}'.format(GLOBAL_MIN_TICK))
 
 
 def advance_poll(t, max_size=100):
+    t_ = GLOBAL_MIN_TICK + t
+    select_constraint = ['tick', 'open', 'high', 'low', 'close']
+    resp = DBSOCK.pass_query("select {1} from oanda_instrument_candles where\
+(tick>={0} and tick<({0}+500)) order by tick limit {2}".format(t_,
+                                                               re.sub('\[]', '', str(select_constraint)),
+                                                               max_size))
 
+    col_names = resp[0]
+    resp_body = resp[1:]
+    outp = {}
+    for col in select_constraint:
+        ind = col_names.index(col)
+        outp[col] = [x[ind] for x in resp_body]
+
+    outp['average'] = [0 for i in range(len(resp_body))]
+    for i in range(len(resp_body)):
+        outp['average'][i] = candle.ohlc_average(candle={'open': resp_body['open'][i],
+                                                         'high': resp_body['high'][i],
+                                                         'low': resp_body['low'][i],
+                                                         'close': resp_body['close'][i]})
+    return outp
 
 
 @count()
 def update(t):
-    open, high, low, close, average = advance_poll(t)
+    data = advance_poll(t)
+    open, high, low, close, average = data['open'], data['high'], data['low'], data['close'], data['average']
     color = "green" if open < close else "red"
 
     new_data = dict(
@@ -56,10 +85,10 @@ def update(t):
     )
 
     close = source.data['close'] + [close]
-    ma12 = _moving_avg(close[-12:], 12)[0]
-    ma26 = _moving_avg(close[-26:], 26)[0]
-    ema12 = _ema(close[-12:], 12)[0]
-    ema26 = _ema(close[-26:], 26)[0]
+    ma12 = moving_average.MA(close, 12)[0]
+    ma26 = moving_average.MA(close, 26)[0]
+    ema12 = moving_average.EMA(close, 12)[0]
+    ema26 = moving_average.EMA(close, 26)[0]
 
     new_data['ma'] = ma12
     # if   mavg.value == MA12:  new_data['ma'] = [ma12]
@@ -71,13 +100,17 @@ def update(t):
     new_data['macd'] = [macd]
 
     macd_series = source.data['macd'] + [macd]
-    macd9 = _ema(macd_series[-26:], 9)[0]
+    macd9 = moving_average.EMA(macd_series[-26:], 9)[0]
     new_data['macd9'] = [macd9]
     new_data['macdh'] = [macd - macd9]
 
     source.stream(new_data, 300)
 
 
+# =====================================================================================================================
+
+
+#
 curdoc().add_root(column(gridplot([[plot_1], [plot_2]], toolbar_location="left", plot_width=1000)))
 curdoc().add_periodic_callback(update, 50)
 curdoc().title = "OHLC"
