@@ -10,7 +10,7 @@ from mptd.database.DatabaseSocket import DatabaseSocket
 
 # =====================================================================================================================
 DEBUG = True
-
+CANDLE_OFFSET = 0.00000001
 
 # =====================================================================================================================
 class CandleDataBuffer(DataBuffer):
@@ -43,18 +43,19 @@ class CandleDataBuffer(DataBuffer):
         self.granularity = g
 
     def _populate(self):
-        q_sttment = "select tick, open, high, low, close from oanda_instrument_candles limit 5000;"
-        # q_sttment = "select {params} from oanda_instrument_candles where" \
-        #             "(granularity=\'{g}\' and tick>{min_tick})" \
-        #             "order by tick asc limit {count};".format(params=re.sub('[\'\[\]]', '', str(self.cols[0])),
-        #                                                      g=self.granularity,
-        #                                                      min_tick=self.min_tick,
-        #                                                      # max_tick=self.min_tick + self.buffer_size + 50,
-        #                                                      count=self.buffer_size)
-        logger.debug(q_sttment)
+        # q_sttment = "select tick, open, high, low, close from oanda_instrument_candles limit 200;"
+        q_sttment = "select {params} from oanda_instrument_candles where" \
+                    "(granularity=\'{g}\' and tick>{min_tick})" \
+                    "order by tick asc limit {count};".format(params=re.sub('[\'\[\]]', '', str(self.cols[0])),
+                                                              g=self.granularity,
+                                                              min_tick=self.min_tick,
+                                                              # max_tick=self.min_tick + self.buffer_size + 50,
+                                                              count=self.buffer_size)
+        # logger.debug(q_sttment)
         self.query(q_sttment)
         # self.min_tick = self.buffer[-1][self.cols[0].index('tick')] + 1
         self.min_tick = self.buffer[-1][(self.cols[0] + self.cols[1]).index('tick')] + 1
+        logger.debug("min_tick set to {}".format(self.min_tick))
 
     def query(self, q=None):
         if q is None:
@@ -65,7 +66,7 @@ class CandleDataBuffer(DataBuffer):
         resp_body = resp[1:]
 
         outp = []
-
+        resp_close = [resp_body[i][col_names.index('close')] for i in range(len(resp_body))]
         for i in range(len(resp_body)):
 
             avg = candle.ohlc_average({'o': resp_body[i][col_names.index('open')],
@@ -73,9 +74,10 @@ class CandleDataBuffer(DataBuffer):
                                        'l': resp_body[i][col_names.index('low')],
                                        'c': resp_body[i][col_names.index('close')]})
 
-            ma12 = moving_average.MA(resp_body, 12)
+            ma12 = moving_average.MA(resp_close[:i+1], 12)
+            ema10 = moving_average.EMA(resp_close[:i+1], 10)
 
-            outp += [list(resp_body[i]) + [avg] + [ma12]]
+            outp += [list(resp_body[i]) + [avg] + [ma12] + [ema10]]
 
         # for col in col_names:
         #     ind = col_names.index(col)
@@ -93,7 +95,7 @@ class CandleDataBuffer(DataBuffer):
         logger.info("Buffer re-populated. Now has {} entries".format(len(self.buffer)))
 
     def check(self):
-        if len(self.buffer) <= self.tolerance:
+        if len(self.buffer)/self.buffer_size <= self.tolerance:
             logger.debug("Buffer at size {}(max={}). Re-populating buffer...".format(len(self.buffer),
                                                                                      self.buffer_size))
             self._populate()
@@ -103,7 +105,7 @@ class CandleDataBuffer(DataBuffer):
     def call_generator(self):
         return next(self.data_gen)
 
-    def pop_data(self, n=1, max_size=200):
+    def pop_data(self, n=1, max_size=250):
         outp = [self.cols]
         while True:
             for i in range(n):
@@ -161,7 +163,9 @@ cdstick_buffer = CandleDataBuffer(db_socket=DatabaseSocket(host='172.17.0.2',
                                                            password='1234',
                                                            user='root',
                                                            port=3306),
-                                  db='mptd_test'
+                                  db='mptd_test',
+                                  buffer_size=200,
+                                  tolerance=0.8
                                   )
 cdstick_buffer.start()
 while True:

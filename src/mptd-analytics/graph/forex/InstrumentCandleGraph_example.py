@@ -70,7 +70,7 @@ def update(t):
         low=[low],
         close=[close],
         average=[average],
-        color=[color],
+        color=[color]
     )
 
     close = source.data['close'] + [close]

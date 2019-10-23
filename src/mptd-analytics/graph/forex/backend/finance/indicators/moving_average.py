@@ -11,9 +11,35 @@ def MA(d, n):
     """
     if len(d) < n:
         return sum(d)/len(d)
-
     return sum(d[-n:])/n
 
+
+# def EMA(d, n):
+#     """
+#     returns exponential moving average
+#     :param d:
+#     :param n:
+#     :return:
+#     """
+#     w = 2/(n+1)
+#
+#     # TODO debug numpy implementation segfault
+#     # multiplier = ones(d, dtype=float)
+#     # multiplier[1:] = 1-k
+#     # multiplier = k * cumprod(multiplier)
+#
+#     # return convolve(d, multiplier)
+#
+#     if len(d) <= n:
+#         return MA(d, n=n)
+#
+#     else:
+#         mult = [(1-w)**i for i in range(n)]
+#         close = [d[i] for i in range(0, -n, -1)]
+#         nought = ((1-w)**n) * MA(d[:-n], n)
+#
+#         print(close, nought, [mult[i]*close[i] for i in range(n)])
+#         return (w * sum([mult[i]*close[i] for i in range(n)])) + nought
 
 def EMA(d, n):
     """
@@ -22,7 +48,7 @@ def EMA(d, n):
     :param n:
     :return:
     """
-    k = 2/(n+1)
+    w = 2/(n+1)
 
     # TODO debug numpy implementation segfault
     # multiplier = ones(d, dtype=float)
@@ -35,15 +61,44 @@ def EMA(d, n):
         return MA(d, n=n)
 
     else:
+        mult = [(1-w)**i for i in range(n)]
+        close = [d[i] for i in range(-1, -n-1, -1)]
+        nought = ((1-w)**n) * MA(d[:-n], n)
 
-    mult = [(1-k) for i in range(len(d))]
-    mult[0] = 1
+        # print(close, nought, [mult[i]*close[i] for i in range(n)])
+        return (w * sum([mult[i]*close[i] for i in range(n)])) + nought
 
-    c =
-    for i in range(len(mult)):
 
-        pass
+def EMA_d(d, n):
+    """
+    returns exponential moving average
+    :param d:
+    :param n:
+    :return:
+    """
+    w = 2/(n+1)
 
+    # TODO debug numpy implementation segfault
+    # multiplier = ones(d, dtype=float)
+    # multiplier[1:] = 1-k
+    # multiplier = k * cumprod(multiplier)
+
+    # return convolve(d, multiplier)
+
+    if len(d) <= n:
+        return MA(d, n=n)
+
+    else:
+        mult = [(1-w)**i for i in range(n)]
+        close = [d[i] for i in range(-1, -n-1, -1)]
+        nought = ((1-w)**n) * MA(d[:-n], n)
+
+        # print(mult)
+        # print(close)
+        # print(nought)
+        # print(sum([mult[i]*close[i] for i in range(n)]))
+
+        return (w * sum([mult[i]*close[i] for i in range(n)])) + nought
 
 def MACD(ma1, ma2):
     """
