@@ -14,20 +14,20 @@ OR data generator for query function??
 
 class DataBuffer(ABC):
     def __init__(self,
-                 dbsock,
-                 db=None,
+                 db_socket,
                  buffer_size=5000,
                  tolerance=0.3,
+                 db=None,
                  ):
         """
-
         :param query_function: query function
         :param buffer_size:
         :param tolerance:
         """
         self.buffer_size = buffer_size
         self.tolerance = tolerance
-        self.dbsock = dbsock
+        self.dbsock = db_socket
+
         self.dbsock.connect(db=db)
 
     @abstractmethod

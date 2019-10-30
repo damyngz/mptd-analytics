@@ -18,7 +18,7 @@ from bokeh.driving import count
 # =====================================================================================================================
 DEBUG = True
 GRANULARITY = "M5"
-COUNT = 150
+COUNT = 100
 BOLLINGER_STDDEV = 2
 api = build_api_instance("~/cfg/.v20.conf")
 
@@ -38,7 +38,7 @@ candles = instrument_candle_request(api=api,
 
 starting_data = dict(
     time=[], average=[], low=[], high=[], open=[], close=[],
-    ma1=[], ma2=[], color=[], macd=[], macd9=[], macdh=[],
+    ma=[], ema=[], color=[], macd=[], macd9=[], macdh=[],
     boll_upper=[], boll_lower=[], boll_centre=[]
 )
 
@@ -68,18 +68,20 @@ for candle_ in candles:
 
     starting_data['color'] += [color]
 
-    close = starting_data['close'] + [c_dict['close']]
-    ma1 = moving_average.EMA(close, 12)
-    ma2 = moving_average.EMA(close, 26)
+    # close = starting_data['close'] + [c_dict['close']]
+    close = starting_data['close']
+    average = starting_data['average']
+    ma = moving_average.MA(close, 12)
+    ema = moving_average.EMA(close, 10)
 
     macd = moving_average.EMA(close, 12) - moving_average.EMA(close, 26)
     macd_series = starting_data['macd'] + [macd]
     macd9 = moving_average.EMA(macd_series, 9)
     macdh = macd - macd9
-    [boll_lower, boll_centre, boll_upper] = bollinger_band.bollinger_band(close, 20, BOLLINGER_STDDEV)
+    [boll_lower, boll_centre, boll_upper] = bollinger_band.bollinger_band(average, 20, BOLLINGER_STDDEV)
 
-    starting_data['ma1'] += [ma1]
-    starting_data['ma2'] += [ma2]
+    starting_data['ma'] += [ma]
+    starting_data['ema'] += [ema]
     starting_data['macd'] += [macd]
     starting_data['macd9'] += [macd9]
     starting_data['macdh'] += [macdh]
@@ -164,16 +166,17 @@ plot_1 = figure(plot_height=500,
 plot_1.x_range.bounds = (0, 1)
 plot_1.x_range.follow = "end"
 plot_1.x_range.follow_interval = timedelta(hours=8)
+# plot_1.x_range.follow_interval = timedelta(days=72)
 # plot_1.x_range.default_span = timedelta(minutes=15)
 plot_1.x_range.range_padding = 0.02
 plot_1.xaxis.formatter = DatetimeTickFormatter(hours=["%H:%M"],
-                                               days=["%H:%M"],
-                                               months=["%H:%M"],
-                                               years=["%H:%M"]
+                                               days=["%d %b"],
+                                               months=["%d %b"],
+                                               years=["%Y"]
                                                )
 plot_1.y_range.max_interval = 0.0035
 plot_1.y_range.min_interval = 0.002
-plot_1.y_range.default_span = 0.00005
+plot_1.y_range.default_span = 0.0005
 # plot_1.y_range.follow = "end"
 # plot_1.y_range.follow_interval = 0.0025
 
@@ -182,8 +185,8 @@ plot_1.line(x='time', y='boll_lower', line_dash='dotted', color='black', source=
 plot_1.line(x='time', y='boll_upper', line_dash='dotted', color='black', source=source)
 plot_1.line(x='time', y='boll_centre', alpha=0.5, line_dash='dotted', color='black', source=source)
 plot_1.line(x='time', y='average', alpha=0.2, line_width=3, color='navy', source=source)
-plot_1.line(x='time', y='ma1', alpha=0.8, line_width=2, color='orange', source=source)
-plot_1.line(x='time', y='ma2', alpha=0.7, line_width=2, color='orangered', source=source)
+plot_1.line(x='time', y='ma', alpha=0.8, line_width=2, color='orange', source=source)
+plot_1.line(x='time', y='ema', alpha=0.7, line_width=2, color='orangered', source=source)
 
 # candle low/high
 plot_1.segment(x0='time', y0='low', x1='time', y1='high', line_width=2, color='black', source=source)
@@ -229,7 +232,7 @@ def update():
 
         new_data = dict(
             time=[], average=[], low=[], high=[], open=[], close=[],
-            ma1=[], ma2=[], color=[], macd=[], macd9=[], macdh=[],
+            ma=[], ema=[], color=[], macd=[], macd9=[], macdh=[],
             boll_upper=[], boll_lower=[], boll_centre=[]
         )
         for candle_ in r:
@@ -256,17 +259,18 @@ def update():
             new_data['color'] += [color]
 
             close = source.data['close'][:-1] + [c_dict['close']]
-            ma1 = moving_average.EMA(close, 12)
-            ma2 = moving_average.EMA(close, 26)
+            average = source.data['average'][:-1] + [c_dict['average']]
+            ma = moving_average.MA(close, 12)
+            ema = moving_average.EMA(close, 10)
 
             macd = moving_average.EMA(close, 12) - moving_average.EMA(close, 26)
             macd_series = source.data['macd'][:-1] + [macd]
             macd9 = moving_average.EMA(macd_series, 9)
             macdh = macd - macd9
-            [boll_lower, boll_centre, boll_upper] = bollinger_band.bollinger_band(close, 20, BOLLINGER_STDDEV)
+            [boll_lower, boll_centre, boll_upper] = bollinger_band.bollinger_band(average, 20, BOLLINGER_STDDEV)
 
-            new_data['ma1'] += [ma1]
-            new_data['ma2'] += [ma2]
+            new_data['ma'] += [ma]
+            new_data['ema'] += [ema]
             new_data['macd'] += [macd]
             new_data['macd9'] += [macd9]
             new_data['macdh'] += [macdh]
@@ -277,7 +281,7 @@ def update():
         if len(r) == 1:
             patch_dict = dict(
                 time=[], average=[], low=[], high=[], open=[], close=[],
-                ma1=[], ma2=[], color=[], macd=[], macd9=[], macdh=[],
+                ma=[], ema=[], color=[], macd=[], macd9=[], macdh=[],
                 boll_upper=[], boll_lower=[], boll_centre=[]
             )
             for k in patch_dict:
@@ -289,11 +293,11 @@ def update():
         if len(r) == 2:
             patch_dict, stream_dict = dict(
                 time=[], average=[], low=[], high=[], open=[], close=[],
-                ma1=[], ma2=[], color=[], macd=[], macd9=[], macdh=[],
+                ma=[], ema=[], color=[], macd=[], macd9=[], macdh=[],
                 boll_upper=[], boll_lower=[], boll_centre=[]
             ),  dict(
                     time=[], average=[], low=[], high=[], open=[], close=[],
-                    ma1=[], ma2=[], color=[], macd=[], macd9=[], macdh=[],
+                    ma=[], ema=[], color=[], macd=[], macd9=[], macdh=[],
                     boll_upper=[], boll_lower=[], boll_centre=[]
                 )
             for k in patch_dict:
@@ -328,6 +332,6 @@ ch.start()
 #
 log_data()
 #
-curdoc().add_periodic_callback(update, 150)
+# curdoc().add_periodic_callback(update, 150)
 curdoc().add_root(column(gridplot([[plot_1], [plot_2]], toolbar_location="left", plot_width=1200)))
 curdoc().title = "OHLC Live"
